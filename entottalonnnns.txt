@@ -726,4 +726,5 @@ print("🎣 Auto Fish V4.0 - Loaded!")
 print("✅ Using YOUR working fishing method")
 print("✅ Blatant Mode available")
 print("✅ Teleport system from dev1.lua integrated")
+
 print("Ready to fish!")

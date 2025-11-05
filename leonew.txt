@@ -55,7 +55,7 @@ local DefaultConfig = {
     AutoCatch = false,
     GPUSaver = false,
     BlatantMode = false,
-    FishDelay = 1.8,
+    FishDelay = 1.5,
     CatchDelay = 0.2,
     SellDelay = 30,
     TeleportLocation = "Sisyphus Statue",
@@ -698,6 +698,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

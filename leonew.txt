@@ -55,7 +55,7 @@ local DefaultConfig = {
     AutoCatch = false,
     GPUSaver = false,
     BlatantMode = false,
-    FishDelay = 0.3,
+    FishDelay = 0.2,
     CatchDelay = 0.2,
     SellDelay = 30,
     TeleportLocation = "Sisyphus Statue",
@@ -341,7 +341,7 @@ local fishingActive = false
 local function castRod()
     pcall(function()
         Events.equip:FireServer(1)
-        task.wait(0.03)
+        task.wait(0.01)
         Events.charge:InvokeServer(1755848498.4834)
         task.wait(0.01)
         Events.minigame:InvokeServer(1.2854545116425, 1)
@@ -396,7 +396,7 @@ local function blatantFishingLoop()
             end
             
             -- Step 4: Short cooldown (50% faster)
-            task.wait(Config.CatchDelay * 0.5)
+            task.wait(Config.CatchDelay * 0.2)
             
             isFishing = false
             print("[Blatant] ⚡ Fast cycle")
@@ -698,6 +698,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

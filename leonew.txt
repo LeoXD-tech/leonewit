@@ -66,6 +66,29 @@ local DefaultConfig = {
 local Config = {}
 for k, v in pairs(DefaultConfig) do Config[k] = v end
 
+TeleportTab:CreateButton({
+    Name = "🔀 Teleport ke Pemain",
+    Callback = function()
+        if typeof(targetName) ~= "string" or targetName == "" then
+            warn("[Teleport] Masukkan nama pemain terlebih dahulu!")
+            return
+        end
+
+        local targetPlayer = Players:FindFirstChild(targetName)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local myChar = LocalPlayer.Character
+            if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+                myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                print("✅ [Teleport] Berhasil teleport ke " .. targetName)
+            else
+                warn("[Teleport] HumanoidRootPart karakter kamu tidak ditemukan!")
+            end
+        else
+            warn("[Teleport] Pemain '" .. targetName .. "' tidak ditemukan atau belum spawn!")
+        end
+    end
+})
+
 -- Teleport Locations (COMPLETE LIST)
 local LOCATIONS = {
     ["Spawn"] = CFrame.new(45.2788086, 252.562927, 2987.10913, 1, 0, 0, 0, 1, 0, 0, 0, 1),
@@ -616,29 +639,6 @@ TeleportTab:CreateInput({
     end
 })
 
-TeleportTab:CreateButton({
-    Name = "🔀 Teleport ke Pemain",
-    Callback = function()
-        if typeof(targetName) ~= "string" or targetName == "" then
-            warn("[Teleport] Masukkan nama pemain terlebih dahulu!")
-            return
-        end
-
-        local targetPlayer = Players:FindFirstChild(targetName)
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local myChar = LocalPlayer.Character
-            if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-                myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
-                print("✅ [Teleport] Berhasil teleport ke " .. targetName)
-            else
-                warn("[Teleport] HumanoidRootPart karakter kamu tidak ditemukan!")
-            end
-        else
-            warn("[Teleport] Pemain '" .. targetName .. "' tidak ditemukan atau belum spawn!")
-        end
-    end
-})
-
 -- ====== TELEPORT TAB (from dev1.lua) ======
 local TeleportTab = Window:CreateTab("🌍 Teleport", nil)
 
@@ -733,6 +733,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

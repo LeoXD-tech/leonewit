@@ -55,7 +55,7 @@ local DefaultConfig = {
     AutoCatch = false,
     GPUSaver = false,
     BlatantMode = false,
-    FishDelay = 0.5,
+    FishDelay = 0.3,
     CatchDelay = 0.2,
     SellDelay = 30,
     TeleportLocation = "Sisyphus Statue",
@@ -341,11 +341,11 @@ local fishingActive = false
 local function castRod()
     pcall(function()
         Events.equip:FireServer(1)
-        task.wait(0.05)
+        task.wait(0.03)
         Events.charge:InvokeServer(1755848498.4834)
-        task.wait(0.02)
+        task.wait(0.01)
         Events.minigame:InvokeServer(1.2854545116425, 1)
-        print("[Fishing] 🎣 Cast")
+        print("[Fishing] 🎣 cast1")
     end)
 end
 
@@ -698,6 +698,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

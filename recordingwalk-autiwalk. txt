@@ -1,1 +1,235 @@
+--[[
+Walk Recorder & Smooth Auto Walk v3
+By xxxnx
+Fitur:
+✅ Input nama record
+✅ Simpan & tampilkan daftar record otomatis
+✅ Playback halus seperti karakter berjalan normal
+✅ UI bisa di-drag
+]]
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local root = character:WaitForChild("HumanoidRootPart")
+
+local recording = false
+local waypoints = {}
+local recordings = {}
+local recordName = ""
+local connection
+local recordInterval = 0.15
+local movementThreshold = 0.1
+
+-- === 🧱 UI ===
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "WalkRecorderUI"
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 340, 0, 320)
+frame.Position = UDim2.new(0, 30, 0, 30)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+-- Title bar
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+title.Text = "Walk Recorder v3"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = frame
+
+-- Drag function
+local dragging, dragStart, startPos = false, nil, nil
+title.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+-- Input nama record
+local nameBox = Instance.new("TextBox")
+nameBox.Size = UDim2.new(1, -20, 0, 30)
+nameBox.Position = UDim2.new(0, 10, 0, 40)
+nameBox.PlaceholderText = "Masukkan nama record (cth: autowalk_1)"
+nameBox.Text = ""
+nameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+nameBox.TextColor3 = Color3.new(1, 1, 1)
+nameBox.Font = Enum.Font.Gotham
+nameBox.TextSize = 12
+nameBox.ClearTextOnFocus = false
+nameBox.Parent = frame
+Instance.new("UICorner", nameBox).CornerRadius = UDim.new(0, 6)
+
+-- Tombol record
+local recordBtn = Instance.new("TextButton")
+recordBtn.Size = UDim2.new(1, -20, 0, 35)
+recordBtn.Position = UDim2.new(0, 10, 0, 80)
+recordBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+recordBtn.Text = "Start Recording"
+recordBtn.TextColor3 = Color3.new(1, 1, 1)
+recordBtn.Font = Enum.Font.Gotham
+recordBtn.TextSize = 13
+recordBtn.Parent = frame
+Instance.new("UICorner", recordBtn).CornerRadius = UDim.new(0, 6)
+
+-- Status
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 25)
+status.Position = UDim2.new(0, 10, 0, 120)
+status.BackgroundTransparency = 1
+status.TextColor3 = Color3.new(1, 1, 1)
+status.Text = "Status: Idle"
+status.Font = Enum.Font.Gotham
+status.TextSize = 12
+status.Parent = frame
+
+-- Label daftar record
+local listLabel = Instance.new("TextLabel")
+listLabel.Size = UDim2.new(1, -20, 0, 20)
+listLabel.Position = UDim2.new(0, 10, 0, 150)
+listLabel.BackgroundTransparency = 1
+listLabel.Text = "Daftar Record:"
+listLabel.TextColor3 = Color3.new(1, 1, 1)
+listLabel.Font = Enum.Font.GothamBold
+listLabel.TextSize = 12
+listLabel.Parent = frame
+
+-- Scroll daftar record
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -20, 0, 140)
+scroll.Position = UDim2.new(0, 10, 0, 170)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.ScrollBarThickness = 6
+scroll.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+scroll.BorderSizePixel = 0
+scroll.Parent = frame
+Instance.new("UICorner", scroll).CornerRadius = UDim.new(0, 6)
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding = UDim.new(0, 5)
+layout.FillDirection = Enum.FillDirection.Vertical
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- === 🧠 Functions ===
+
+local function refreshList()
+	for _, child in pairs(scroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	for name, _ in pairs(recordings) do
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -10, 0, 30)
+		btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		btn.Text = "▶ " .. name
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 12
+		btn.Parent = scroll
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+
+		btn.MouseButton1Click:Connect(function()
+			status.Text = "Playing " .. name .. "..."
+			local path = recordings[name]
+			if not path then
+				status.Text = "Record tidak ditemukan!"
+				return
+			end
+
+			-- Smooth walking playback
+			for i = 1, #path do
+				if not character or not character.Parent then break end
+				local targetPos = path[i]
+				local currentPos = root.Position
+				local dist = (targetPos - currentPos).Magnitude
+				local walkTime = dist / 6 -- kecepatan jalan normal
+				humanoid:MoveTo(targetPos)
+				humanoid.MoveToFinished:Wait()
+				RunService.Heartbeat:Wait()
+			end
+			status.Text = "Selesai play " .. name
+		end)
+	end
+
+	scroll.CanvasSize = UDim2.new(0, 0, 0, #scroll:GetChildren() * 35)
+end
+
+local function startRecording()
+	recordName = nameBox.Text
+	if recordName == "" then
+		status.Text = "Masukkan nama record dulu!"
+		return
+	end
+
+	if recordings[recordName] then
+		status.Text = "Nama sudah dipakai!"
+		return
+	end
+
+	recording = true
+	waypoints = {}
+	status.Text = "Recording " .. recordName .. "..."
+	recordBtn.Text = "Stop Recording"
+	recordBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+
+	local lastTime = tick()
+	connection = RunService.Heartbeat:Connect(function()
+		if recording and humanoid.MoveDirection.Magnitude > movementThreshold then
+			if tick() - lastTime >= recordInterval then
+				lastTime = tick()
+				table.insert(waypoints, root.Position)
+			end
+		end
+	end)
+end
+
+local function stopRecording()
+	recording = false
+	if connection then connection:Disconnect() end
+	if #waypoints > 0 then
+		recordings[recordName] = table.clone(waypoints)
+		status.Text = "Record " .. recordName .. " tersimpan (" .. #waypoints .. " titik)"
+		refreshList()
+	else
+		status.Text = "Tidak ada data yang direkam"
+	end
+	recordBtn.Text = "Start Recording"
+	recordBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+end
+
+recordBtn.MouseButton1Click:Connect(function()
+	if not recording then
+		startRecording()
+	else
+		stopRecording()
+	end
+end)
+
+player.CharacterRemoving:Connect(function()
+	if connection then connection:Disconnect() end
+end)

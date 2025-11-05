@@ -55,7 +55,7 @@ local DefaultConfig = {
     AutoCatch = false,
     GPUSaver = false,
     BlatantMode = false,
-    FishDelay = 0.6,
+    FishDelay = 0.5,
     CatchDelay = 0.2,
     SellDelay = 30,
     TeleportLocation = "Sisyphus Statue",
@@ -152,7 +152,7 @@ local RarityTiers = {
     Epic = 4,
     Legendary = 5,
     Mythic = 6,
-    Secret = 7
+    Secret = 9
 }
 
 local function getRarityValue(rarity)
@@ -698,6 +698,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

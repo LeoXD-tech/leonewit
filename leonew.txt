@@ -1,6 +1,6 @@
 -- ====================================================================
---                 AUTO FISH V4.0 - RAYFIELD UI EDITION
---          Based on Working test.lua Fishing Method
+--                 LeoXD Fish - RAYFIELD UI EDITION
+--          Based on Working leo.lua talon kikir
 -- ====================================================================
 
 -- ====== CRITICAL DEPENDENCY VALIDATION ======
@@ -671,47 +671,30 @@ SettingsTab:CreateButton({
 local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 
 InfoTab:CreateParagraph({
-    Title = "Features",
+    Title = "Credits",
     Content = [[
-• Fast Auto Fishing with BLATANT MODE
-• Simple Auto Sell (keeps favorited fish)
-• Auto Catch for extra speed
-• GPU Saver Mode
-• Anti-AFK Protection
-• Auto Save Configuration
-• Teleport System (dev1.lua method)
-• Auto Favorite (Mythic & Secret only)
+LeoXD - Brayenn - Udin swik cik😂
     ]]
 })
 
 InfoTab:CreateParagraph({
-    Title = "Blatant Mode Explained",
+    Title = "TOLOL LU",
     Content = [[
-⚡ BLATANT MODE METHOD:
-- Casts 2 rods in parallel (overlapping)
-- Same wait time for fish to bite
-- Spams reel 5x to instant catch
-- 50% faster cooldown between casts
-- Result: ~40% faster fishing!
-
-How it's faster:
-✓ Multiple casts = higher catch rate
-✓ Spam reeling = instant catch
-✓ Reduced cooldown = faster cycles
-✗ Same fish delay (fish needs time!)
+GA USH MENDING KEPOIN YG DI ATAS
     ]]
 })
 
 -- ====== STARTUP ======
 Rayfield:Notify({
-    Title = "Auto Fish Loaded",
-    Content = "Ready to fish!",
+    Title = "Bantai Talon Ajg",
+    Content = "LeoXD - DINDUN!",
     Duration = 5,
     Image = 4483362458
 })
 
-print("🎣 Auto Fish V4.0 - Loaded!")
+print("🎣 LeoXD - UDIN BAKO - Loaded!")
 print("✅ Using YOUR working fishing method")
-print("✅ Blatant Mode available")
+print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
+
 print("Ready to fish!")

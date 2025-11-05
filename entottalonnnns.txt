@@ -1,5 +1,3 @@
-
-
 -- ====== CRITICAL DEPENDENCY VALIDATION ======
 local success, errorMsg = pcall(function()
     local services = {
@@ -728,3 +726,4 @@ print("✅ Blatant Mode available")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+

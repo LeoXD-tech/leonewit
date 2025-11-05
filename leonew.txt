@@ -604,6 +604,18 @@ MainTab:CreateButton({
     end
 })
 
+-- ====== TELEPORT PEMAIN ======
+local targetName = ""
+
+TeleportTab:CreateInput({
+    Name = "Nama Pemain (Target Teleport)",
+    PlaceholderText = "Masukkan Nama Pemain",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(input)
+        targetName = input
+    end
+})
+
 -- ====== TELEPORT TAB (from dev1.lua) ======
 local TeleportTab = Window:CreateTab("🌍 Teleport", nil)
 
@@ -698,6 +710,7 @@ print("✅ Blatant")
 print("✅ Teleport system from dev1.lua integrated")
 
 print("Ready to fish!")
+
 
 
 

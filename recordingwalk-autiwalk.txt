@@ -1,11 +1,11 @@
 --[[
-Walk Recorder & Smooth Auto Walk v3
-By xxxnx
-Fitur:
-✅ Input nama record
-✅ Simpan & tampilkan daftar record otomatis
-✅ Playback halus seperti karakter berjalan normal
-✅ UI bisa di-drag
+Walk Recorder & Smooth Auto Walk v3 (improved)
+By xxxnx (updated)
+Perbaikan:
+- Simpan timestamp tiap titik (untuk rekonsturksi timing)
+- Rekam event jump (Jumping / Freefall)
+- Playback menggunakan Tween sesuai delta waktu agar lebih halus
+- Tambah fitur Pause / Resume saat merekam
 ]]
 
 local Players = game:GetService("Players")
@@ -19,19 +19,22 @@ local humanoid = character:WaitForChild("Humanoid")
 local root = character:WaitForChild("HumanoidRootPart")
 
 local recording = false
+local paused = false
 local waypoints = {}
 local recordings = {}
 local recordName = ""
 local connection
-local recordInterval = 0.15
-local movementThreshold = 0.1
+local recordInterval = 0.12
+local movementThreshold = 0.05
+local recordStartTime = 0
+local elapsedTime = 0
 
 -- === 🧱 UI ===
 local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 gui.Name = "WalkRecorderUI"
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 340, 0, 320)
+frame.Size = UDim2.new(0, 340, 0, 360)
 frame.Position = UDim2.new(0, 30, 0, 30)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BorderSizePixel = 0
@@ -42,7 +45,7 @@ Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-title.Text = "Walk Recorder v3"
+title.Text = "Walk Recorder v3 (improved)"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -83,7 +86,7 @@ nameBox.ClearTextOnFocus = false
 nameBox.Parent = frame
 Instance.new("UICorner", nameBox).CornerRadius = UDim.new(0, 6)
 
--- Tombol record
+-- Tombol record / stop
 local recordBtn = Instance.new("TextButton")
 recordBtn.Size = UDim2.new(1, -20, 0, 35)
 recordBtn.Position = UDim2.new(0, 10, 0, 80)
@@ -95,10 +98,23 @@ recordBtn.TextSize = 13
 recordBtn.Parent = frame
 Instance.new("UICorner", recordBtn).CornerRadius = UDim.new(0, 6)
 
+-- Tombol pause/resume (hanya saat recording)
+local pauseBtn = Instance.new("TextButton")
+pauseBtn.Size = UDim2.new(1, -20, 0, 30)
+pauseBtn.Position = UDim2.new(0, 10, 0, 120)
+pauseBtn.BackgroundColor3 = Color3.fromRGB(255, 193, 7)
+pauseBtn.Text = "Pause"
+pauseBtn.Visible = false
+pauseBtn.TextColor3 = Color3.new(0, 0, 0)
+pauseBtn.Font = Enum.Font.Gotham
+pauseBtn.TextSize = 12
+pauseBtn.Parent = frame
+Instance.new("UICorner", pauseBtn).CornerRadius = UDim.new(0, 6)
+
 -- Status
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, -20, 0, 25)
-status.Position = UDim2.new(0, 10, 0, 120)
+status.Position = UDim2.new(0, 10, 0, 160)
 status.BackgroundTransparency = 1
 status.TextColor3 = Color3.new(1, 1, 1)
 status.Text = "Status: Idle"
@@ -109,7 +125,7 @@ status.Parent = frame
 -- Label daftar record
 local listLabel = Instance.new("TextLabel")
 listLabel.Size = UDim2.new(1, -20, 0, 20)
-listLabel.Position = UDim2.new(0, 10, 0, 150)
+listLabel.Position = UDim2.new(0, 10, 0, 190)
 listLabel.BackgroundTransparency = 1
 listLabel.Text = "Daftar Record:"
 listLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -119,8 +135,8 @@ listLabel.Parent = frame
 
 -- Scroll daftar record
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 0, 140)
-scroll.Position = UDim2.new(0, 10, 0, 170)
+scroll.Size = UDim2.new(1, -20, 0, 150)
+scroll.Position = UDim2.new(0, 10, 0, 215)
 scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.ScrollBarThickness = 6
 scroll.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
@@ -161,22 +177,59 @@ local function refreshList()
 				return
 			end
 
-			-- Smooth walking playback
+			-- Playback: gunakan tween per segmen berdasarkan timestamp
+			-- Teleport ke posisi awal (agar playback dimulai dari titik pertama)
+			if #path == 0 then
+				status.Text = "Record kosong!"
+				return
+			end
+
+			-- Pastikan karakter ada
+			if not character or not character.Parent then
+				status.Text = "Karakter tidak ada!"
+				return
+			end
+
+			-- Set posisi awal tanpa tween (agar sinkron)
+			root.CFrame = CFrame.new(path[1].pos)
+
+			-- Loop segmen
 			for i = 1, #path do
 				if not character or not character.Parent then break end
-				local targetPos = path[i]
-				local currentPos = root.Position
-				local dist = (targetPos - currentPos).Magnitude
-				local walkTime = dist / 6 -- kecepatan jalan normal
-				humanoid:MoveTo(targetPos)
-				humanoid.MoveToFinished:Wait()
-				RunService.Heartbeat:Wait()
+				local entry = path[i]
+				local nextEntry = path[i+1]
+				local duration = recordInterval
+				if nextEntry then
+					duration = math.max(0.03, nextEntry.t - entry.t) -- gunakan delta waktu rekaman
+				end
+
+				-- Jika titik menandai jump, trigger jump
+				if entry.jump then
+					-- trigger jump; jika grounded maka ini akan membuat humanoid melompat
+					humanoid.Jump = true
+				end
+
+				-- Tween ke posisi target (CFrame menggunakan posisi target dengan rotasi saat ini)
+				local targetCFrame = CFrame.new(entry.pos, entry.pos + (root.CFrame.LookVector))
+				local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+				tween:Play()
+
+				-- tunggu durasi dengan Heartbeat supaya tetap responsive
+				local elapsed = 0
+				while elapsed < duration do
+					local dt = RunService.Heartbeat:Wait()
+					elapsed = elapsed + dt
+					-- jika karakter terhapus, stop
+					if not character or not character.Parent then break end
+				end
 			end
+
 			status.Text = "Selesai play " .. name
 		end)
 	end
 
-	scroll.CanvasSize = UDim2.new(0, 0, 0, #scroll:GetChildren() * 35)
+	-- sesuaikan CanvasSize
+	scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
 end
 
 local function startRecording()
@@ -192,17 +245,34 @@ local function startRecording()
 	end
 
 	recording = true
+	paused = false
 	waypoints = {}
 	status.Text = "Recording " .. recordName .. "..."
 	recordBtn.Text = "Stop Recording"
 	recordBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+	pauseBtn.Visible = true
+	pauseBtn.Text = "Pause"
 
-	local lastTime = tick()
-	connection = RunService.Heartbeat:Connect(function()
-		if recording and humanoid.MoveDirection.Magnitude > movementThreshold then
-			if tick() - lastTime >= recordInterval then
-				lastTime = tick()
-				table.insert(waypoints, root.Position)
+	recordStartTime = tick()
+	elapsedTime = 0
+	local lastSample = 0
+
+	-- koneksi Heartbeat untuk sampling posisi + state
+	connection = RunService.Heartbeat:Connect(function(dt)
+		if not recording or paused then return end
+
+		elapsedTime = elapsedTime + dt
+
+		-- Ambil state jump (Jumping / Freefall) agar lompatan terekam
+		local state = humanoid:GetState()
+		local isJumping = (state == Enum.HumanoidStateType.Jumping) or (state == Enum.HumanoidStateType.Freefall)
+
+		-- Rekam jika player bergerak/bergeser atau jika sedang jumping (biar lompatan terekam)
+		if humanoid.MoveDirection.Magnitude > movementThreshold or isJumping or (elapsedTime - lastSample >= recordInterval) then
+			-- pastikan titik tidak terlalu rapat waktu
+			if elapsedTime - lastSample >= 0.02 then
+				table.insert(waypoints, {pos = root.Position, t = elapsedTime, jump = isJumping})
+				lastSample = elapsedTime
 			end
 		end
 	end)
@@ -210,7 +280,10 @@ end
 
 local function stopRecording()
 	recording = false
-	if connection then connection:Disconnect() end
+	paused = false
+	if connection then connection:Disconnect() connection = nil end
+	pauseBtn.Visible = false
+
 	if #waypoints > 0 then
 		recordings[recordName] = table.clone(waypoints)
 		status.Text = "Record " .. recordName .. " tersimpan (" .. #waypoints .. " titik)"
@@ -230,6 +303,21 @@ recordBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+pauseBtn.MouseButton1Click:Connect(function()
+	if not recording then return end
+	paused = not paused
+	if paused then
+		pauseBtn.Text = "Resume"
+		status.Text = "Recording paused"
+	else
+		pauseBtn.Text = "Pause"
+		status.Text = "Recording " .. recordName .. "..."
+	end
+end)
+
 player.CharacterRemoving:Connect(function()
 	if connection then connection:Disconnect() end
 end)
+
+-- Inisialisasi list jika ada data default (kosong sekarang)
+refreshList()

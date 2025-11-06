@@ -1,12 +1,16 @@
 --[[
-Walk Recorder & Smooth Auto Walk v3 (moveTo playback)
+Walk Recorder & Smooth Auto Walk v4 (pathfinding playback + hide/close UI)
 By xxxnx (updated)
-Perbaikan playback agar terasa 'normal' menggunakan Humanoid:MoveTo
+Perubahan:
+- Playback menggunakan PathfindingService untuk gerakan natural
+- Perbaikan timeout & arrival radius -> mengurangi geter/jegang
+- Jump tetap ditrigger berdasarkan rekaman
+- Tambah tombol Hide / Show / Close untuk UI
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
@@ -22,15 +26,14 @@ local recordName = ""
 local connection
 local recordInterval = 0.12
 local movementThreshold = 0.05
-local recordStartTime = 0
 local elapsedTime = 0
 
--- === 🧱 UI ===
+-- UI
 local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 gui.Name = "WalkRecorderUI"
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 340, 0, 360)
+frame.Size = UDim2.new(0, 340, 0, 380)
 frame.Position = UDim2.new(0, 30, 0, 30)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BorderSizePixel = 0
@@ -41,13 +44,13 @@ Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-title.Text = "Walk Recorder v3 (improved)"
+title.Text = "Walk Recorder v4"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 title.Parent = frame
 
--- Drag function
+-- Drag
 local dragging, dragStart, startPos = false, nil, nil
 title.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -68,7 +71,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Input nama record
+-- Name input
 local nameBox = Instance.new("TextBox")
 nameBox.Size = UDim2.new(1, -20, 0, 30)
 nameBox.Position = UDim2.new(0, 10, 0, 40)
@@ -82,7 +85,7 @@ nameBox.ClearTextOnFocus = false
 nameBox.Parent = frame
 Instance.new("UICorner", nameBox).CornerRadius = UDim.new(0, 6)
 
--- Tombol record / stop
+-- Buttons
 local recordBtn = Instance.new("TextButton")
 recordBtn.Size = UDim2.new(1, -20, 0, 35)
 recordBtn.Position = UDim2.new(0, 10, 0, 80)
@@ -94,7 +97,6 @@ recordBtn.TextSize = 13
 recordBtn.Parent = frame
 Instance.new("UICorner", recordBtn).CornerRadius = UDim.new(0, 6)
 
--- Tombol pause/resume (hanya saat recording)
 local pauseBtn = Instance.new("TextButton")
 pauseBtn.Size = UDim2.new(1, -20, 0, 30)
 pauseBtn.Position = UDim2.new(0, 10, 0, 120)
@@ -107,7 +109,42 @@ pauseBtn.TextSize = 12
 pauseBtn.Parent = frame
 Instance.new("UICorner", pauseBtn).CornerRadius = UDim.new(0, 6)
 
--- Status
+-- Hide & Close
+local hideBtn = Instance.new("TextButton")
+hideBtn.Size = UDim2.new(0, 70, 0, 25)
+hideBtn.Position = UDim2.new(1, -80, 0, 6)
+hideBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+hideBtn.Text = "Hide"
+hideBtn.TextColor3 = Color3.new(1,1,1)
+hideBtn.Font = Enum.Font.Gotham
+hideBtn.TextSize = 12
+hideBtn.Parent = frame
+Instance.new("UICorner", hideBtn).CornerRadius = UDim.new(0, 6)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 25, 0, 25)
+closeBtn.Position = UDim2.new(1, -40, 0, 6)
+closeBtn.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Parent = frame
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+local showBtn = Instance.new("TextButton")
+showBtn.Size = UDim2.new(0, 60, 0, 30)
+showBtn.Position = UDim2.new(0, 10, 0, 30)
+showBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+showBtn.Text = "Show"
+showBtn.TextColor3 = Color3.new(1,1,1)
+showBtn.Font = Enum.Font.Gotham
+showBtn.TextSize = 12
+showBtn.Parent = gui
+showBtn.Visible = false
+Instance.new("UICorner", showBtn).CornerRadius = UDim.new(0, 6)
+
+-- Status & list
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, -20, 0, 25)
 status.Position = UDim2.new(0, 10, 0, 160)
@@ -118,7 +155,6 @@ status.Font = Enum.Font.Gotham
 status.TextSize = 12
 status.Parent = frame
 
--- Label daftar record
 local listLabel = Instance.new("TextLabel")
 listLabel.Size = UDim2.new(1, -20, 0, 20)
 listLabel.Position = UDim2.new(0, 10, 0, 190)
@@ -129,9 +165,8 @@ listLabel.Font = Enum.Font.GothamBold
 listLabel.TextSize = 12
 listLabel.Parent = frame
 
--- Scroll daftar record
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 0, 150)
+scroll.Size = UDim2.new(1, -20, 0, 170)
 scroll.Position = UDim2.new(0, 10, 0, 215)
 scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.ScrollBarThickness = 6
@@ -145,13 +180,15 @@ layout.Padding = UDim.new(0, 5)
 layout.FillDirection = Enum.FillDirection.Vertical
 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
--- === 🧠 Functions ===
+-- Helpers
+local function safeTeleportTo(pos)
+	-- gunanya hanya untuk sinkron awal jika benar-benar dekat jarak kecil; hindari sering-teleport
+	pcall(function() root.CFrame = CFrame.new(pos) end)
+end
 
 local function refreshList()
 	for _, child in pairs(scroll:GetChildren()) do
-		if child:IsA("TextButton") then
-			child:Destroy()
-		end
+		if child:IsA("TextButton") then child:Destroy() end
 	end
 
 	for name, _ in pairs(recordings) do
@@ -168,27 +205,18 @@ local function refreshList()
 		btn.MouseButton1Click:Connect(function()
 			status.Text = "Playing " .. name .. "..."
 			local path = recordings[name]
-			if not path then
-				status.Text = "Record tidak ditemukan!"
+			if not path or #path == 0 then
+				status.Text = "Record tidak ditemukan atau kosong!"
 				return
 			end
-
-			if #path == 0 then
-				status.Text = "Record kosong!"
-				return
-			end
-
 			if not character or not character.Parent then
 				status.Text = "Karakter tidak ada!"
 				return
 			end
 
-			-- Pindah ke posisi awal agar sinkron
-			pcall(function()
-				root.CFrame = CFrame.new(path[1].pos)
-			end)
-
-			-- Loop: gunakan MoveTo ke next point (lebih natural karena pakai Humanoid)
+			-- Playback menggunakan PathfindingService -> lebih natural
+			-- Jangan memaksa banyak teleport; biarkan Humanoid berjalan
+			local arrivalRadius = 1.5 -- semakin kecil -> lebih presisi tapi bisa stuck
 			for i = 1, #path - 1 do
 				if not character or not character.Parent then break end
 				local entry = path[i]
@@ -196,54 +224,99 @@ local function refreshList()
 				local targetPos = nextEntry.pos
 				local segmentDuration = math.max(0.05, nextEntry.t - entry.t)
 
-				-- Hadapi target agar animasi jalan mengarah ke tujuan
-				pcall(function()
-					root.CFrame = CFrame.new(root.Position, targetPos)
-				end)
-
-				-- Jika nextEntry menandai jump, trigger jump sedikit sebelum atau saat mulai bergerak
+				-- Trigger jump flagged pada nextEntry agar lompatan terjadi saat transit
 				if nextEntry.jump then
 					humanoid.Jump = true
 				end
 
-				-- Gunakan MoveTo untuk mengikuti pathfinding Humanoid
-				humanoid:MoveTo(targetPos)
+				-- Hitung path dari posisi sekarang ke target
+				local success, computedPath = pcall(function()
+					local p = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true, AgentMaxSlope = 45})
+					p:ComputeAsync(root.Position, targetPos)
+					return p
+				end)
 
-				-- Tunggu sampai mendekati target atau timeout
-				local elapsed = 0
-				local maxTime = math.max(0.5, segmentDuration * 2 + 0.6) -- safety timeout
-				while elapsed < maxTime do
-					local dt = RunService.Heartbeat:Wait()
-					elapsed = elapsed + dt
-					if not character or not character.Parent then break end
-					if (root.Position - targetPos).Magnitude <= 2 then
-						-- mendekati target -> lanjut ke segmen berikutnya
-						break
+				if not success or not computedPath then
+					-- fallback: langsung MoveTo target
+					humanoid:MoveTo(targetPos)
+					local elapsed = 0
+					local maxTime = math.max(1.0, segmentDuration * 2 + 0.8)
+					while elapsed < maxTime do
+						local dt = RunService.Heartbeat:Wait()
+						elapsed = elapsed + dt
+						if (root.Position - targetPos).Magnitude <= arrivalRadius then break end
+						if not character or not character.Parent then break end
+					end
+				else
+					-- Jika path status sukses, ikuti path waypoints
+					if computedPath.Status == Enum.PathStatus.Success then
+						local waypointsPF = computedPath:GetWaypoints()
+						for _, wp in ipairs(waypointsPF) do
+							if not character or not character.Parent then break end
+							-- Jika waypoint tipe Jump, set Jump
+							if wp.Action == Enum.PathWaypointAction.Jump then
+								humanoid.Jump = true
+							end
+							humanoid:MoveTo(wp.Position)
+							local elapsed = 0
+							local maxTime = 3.0 -- safety cap per waypoint
+							while elapsed < maxTime do
+								local dt = RunService.Heartbeat:Wait()
+								elapsed = elapsed + dt
+								if (root.Position - wp.Position).Magnitude <= math.max(1.2, arrivalRadius) then break end
+								if not character or not character.Parent then break end
+							end
+						end
+					else
+						-- Jika path gagal, fallback MoveTo
+						humanoid:MoveTo(targetPos)
+						local elapsed = 0
+						local maxTime = math.max(1.0, segmentDuration * 2 + 0.8)
+						while elapsed < maxTime do
+							local dt = RunService.Heartbeat:Wait()
+							elapsed = elapsed + dt
+							if (root.Position - targetPos).Magnitude <= arrivalRadius then break end
+							if not character or not character.Parent then break end
+						end
 					end
 				end
 			end
 
-			-- Pastikan titik terakhir juga dipindahkan ke posisi akhir rekaman
+			-- Pastikan ke titik terakhir (posisi akhir rekaman)
 			local last = path[#path]
 			if last then
-				pcall(function() root.CFrame = CFrame.new(last.pos) end)
+				-- Jangan paksa teleport bila jarak jauh; kita hanya tele ke posisi terakhir jika dekat (mis. <5)
+				if (root.Position - last.pos).Magnitude <= 5 then
+					-- sedikit teleport agar posisi sinkron tanpa terasa
+					pcall(function() root.CFrame = CFrame.new(last.pos) end)
+				else
+					-- jika jauh, biarkan Humanoid MoveTo untuk mencapai
+					humanoid:MoveTo(last.pos)
+					local elapsed = 0
+					local maxTime = 3.0
+					while elapsed < maxTime do
+						local dt = RunService.Heartbeat:Wait()
+						elapsed = elapsed + dt
+						if (root.Position - last.pos).Magnitude <= 1.5 then break end
+						if not character or not character.Parent then break end
+					end
+				end
 			end
 
 			status.Text = "Selesai play " .. name
 		end)
 	end
 
-	-- sesuaikan CanvasSize
 	scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
 end
 
+-- Recording
 local function startRecording()
 	recordName = nameBox.Text
 	if recordName == "" then
 		status.Text = "Masukkan nama record dulu!"
 		return
 	end
-
 	if recordings[recordName] then
 		status.Text = "Nama sudah dipakai!"
 		return
@@ -258,23 +331,17 @@ local function startRecording()
 	pauseBtn.Visible = true
 	pauseBtn.Text = "Pause"
 
-	recordStartTime = tick()
 	elapsedTime = 0
 	local lastSample = 0
 
-	-- koneksi Heartbeat untuk sampling posisi + state
 	connection = RunService.Heartbeat:Connect(function(dt)
 		if not recording or paused then return end
-
 		elapsedTime = elapsedTime + dt
-
-		-- Ambil state jump (Jumping / Freefall) agar lompatan terekam
 		local state = humanoid:GetState()
 		local isJumping = (state == Enum.HumanoidStateType.Jumping) or (state == Enum.HumanoidStateType.Freefall)
 
-		-- Rekam jika player bergerak/bergeser atau jika sedang jumping (biar lompatan terekam)
+		-- Rekam jika bergerak, jump, atau interval waktu tercapai
 		if humanoid.MoveDirection.Magnitude > movementThreshold or isJumping or (elapsedTime - lastSample >= recordInterval) then
-			-- pastikan titik tidak terlalu rapat waktu
 			if elapsedTime - lastSample >= 0.02 then
 				table.insert(waypoints, {pos = root.Position, t = elapsedTime, jump = isJumping})
 				lastSample = elapsedTime
@@ -300,12 +367,9 @@ local function stopRecording()
 	recordBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
 end
 
+-- UI actions
 recordBtn.MouseButton1Click:Connect(function()
-	if not recording then
-		startRecording()
-	else
-		stopRecording()
-	end
+	if not recording then startRecording() else stopRecording() end
 end)
 
 pauseBtn.MouseButton1Click:Connect(function()
@@ -320,17 +384,28 @@ pauseBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+hideBtn.MouseButton1Click:Connect(function()
+	frame.Visible = false
+	showBtn.Visible = true
+end)
+
+showBtn.MouseButton1Click:Connect(function()
+	frame.Visible = true
+	showBtn.Visible = false
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	-- hentikan koneksi lalu hancurkan gui
+	if connection then connection:Disconnect() connection = nil end
+	gui:Destroy()
+end)
+
 player.CharacterRemoving:Connect(function()
 	if connection then connection:Disconnect() end
 end)
 
--- Inisialisasi list jika ada data default (kosong sekarang)
-refreshList()local paused = false
-local waypoints = {}
-local recordings = {}
-local recordName = ""
-local connection
-local recordInterval = 0.12
+-- init
+refreshList()al = 0.12
 local movementThreshold = 0.05
 local recordStartTime = 0
 local elapsedTime = 0
